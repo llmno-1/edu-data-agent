@@ -3,7 +3,12 @@
     "allow": [
       "Bash(gh auth *)",
       "Bash(git init *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Read(//tmp/**)",
+      "Bash(ls /data/)",
+      "Bash(docker exec *)",
+      "Bash(docker-compose up *)",
+      "Bash(.venv/Scripts/python.exe -m uvicorn main:app --reload --host 0.0.0.0 --port 8000)"
     ]
   }
 }
