@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+
+# 虚拟环境
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 日志
+logs/
+
+# 环境变量
+.env
+.env.local
+
+# 大模型文件
+docker/embedding/bge-large-zh-v1.5/pytorch_model.bin
+docker/embedding/bge-large-zh-v1.5/.cache/
+
+# OS
+.DS_Store
+Thumbs.db

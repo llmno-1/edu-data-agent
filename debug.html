@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>掌柜问数 · 教育经营数据智能分析</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'pulse-dot': 'pulseDot 2s infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulseDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        /* 自定义滚动条 */
+        .chat-area::-webkit-scrollbar { width: 6px; }
+        .chat-area::-webkit-scrollbar-track { background: transparent; }
+        .chat-area::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+        .chat-area::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+        /* 打字光标 */
+        .typing-cursor::after {
+            content: '▊';
+            animation: blink 1s step-end infinite;
+            color: #6366f1;
+        }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        /* 思考动画展开 */
+        .think-collapse { max-height: 0; overflow: hidden; transition: max-height 0.4s ease; }
+        .think-collapse.open { max-height: 600px; }
+
+        /* 表格样式 */
+        .result-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .result-table th { background: #f8fafc; padding: 10px 14px; text-align: left; font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+        .result-table td { padding: 8px 14px; color: #334155; border-bottom: 1px solid #f1f5f9; }
+        .result-table tr:hover td { background: #f8fafc; }
+        .result-table td.number { text-align: right; font-variant-numeric: tabular-nums; }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col">
+
+    <!-- ========== 顶部导航栏 ========== -->
+    <header class="bg-white border-b border-gray-200 px-5 py-3 flex items-center justify-between shadow-sm z-10 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 bg-indigo-600 rounded-lg flex items-center justify-center">
+                <i class="fa fa-database text-white text-sm"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold text-gray-800 tracking-tight">掌柜问数</h1>
+                <p class="text-xs text-gray-400">教育经营数据智能分析</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <!-- 状态指示灯 -->
+            <div class="flex items-center gap-3 text-xs">
+                <div class="flex items-center gap-1.5" id="statusMysql">
+                    <span class="w-2 h-2 rounded-full bg-gray-300 inline-block"></span>
+                    <span class="text-gray-500">MySQL</span>
+                </div>
+                <div class="flex items-center gap-1.5" id="statusEs">
+                    <span class="w-2 h-2 rounded-full bg-gray-300 inline-block"></span>
+                    <span class="text-gray-500">ES</span>
+                </div>
+                <div class="flex items-center gap-1.5" id="statusQdrant">
+                    <span class="w-2 h-2 rounded-full bg-gray-300 inline-block"></span>
+                    <span class="text-gray-500">Qdrant</span>
+                </div>
+            </div>
+            <button onclick="clearChat()" class="text-gray-400 hover:text-gray-600 transition" title="清空对话">
+                <i class="fa fa-trash-o"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- ========== 中间聊天区域 ========== -->
+    <div class="flex-1 overflow-y-auto chat-area px-4 py-5" id="chatArea">
+        <!-- 欢迎界面 -->
+        <div id="welcomePanel" class="max-w-2xl mx-auto mt-16 text-center">
+            <div class="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-5">
+                <i class="fa fa-comments-o text-indigo-500 text-2xl"></i>
+            </div>
+            <h2 class="text-xl font-bold text-gray-700 mb-2">今天想了解什么？</h2>
+            <p class="text-gray-400 text-sm mb-8">输入自然语言问题，我将帮你查询教育经营数据</p>
+            <div class="grid grid-cols-2 gap-3 text-left max-w-lg mx-auto" id="welcomeBtns">
+                <button class="welcome-btn bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-600 hover:border-indigo-300 hover:shadow-sm transition text-left flex items-start gap-2">
+                    <i class="fa fa-line-chart text-indigo-400 mt-0.5"></i>
+                    <span>海淀校区本月报名人数</span>
+                </button>
+                <button class="welcome-btn bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-600 hover:border-indigo-300 hover:shadow-sm transition text-left flex items-start gap-2">
+                    <i class="fa fa-money text-green-400 mt-0.5"></i>
+                    <span>各校区收入总额</span>
+                </button>
+                <button class="welcome-btn bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-600 hover:border-indigo-300 hover:shadow-sm transition text-left flex items-start gap-2">
+                    <i class="fa fa-check-circle text-blue-400 mt-0.5"></i>
+                    <span>出勤率最高的班次</span>
+                </button>
+                <button class="welcome-btn bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-600 hover:border-indigo-300 hover:shadow-sm transition text-left flex items-start gap-2">
+                    <i class="fa fa-percent text-orange-400 mt-0.5"></i>
+                    <span>最近三个月退款率</span>
+                </button>
+                <button class="welcome-btn bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-600 hover:border-indigo-300 hover:shadow-sm transition text-left flex items-start gap-2">
+                    <i class="fa fa-exchange text-purple-400 mt-0.5"></i>
+                    <span>线上和线下完课率对比</span>
+                </button>
+                <button class="welcome-btn bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-600 hover:border-indigo-300 hover:shadow-sm transition text-left flex items-start gap-2">
+                    <i class="fa fa-map-signs text-teal-400 mt-0.5"></i>
+                    <span>哪个渠道报名人数最多</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 对话消息将动态插入此处 -->
+        <div id="messageContainer" class="max-w-2xl mx-auto space-y-5 hidden"></div>
+    </div>
+
+    <!-- ========== 底部输入区 ========== -->
+    <div class="bg-white border-t border-gray-200 px-4 py-3 shrink-0">
+        <div class="max-w-2xl mx-auto">
+            <!-- 快捷标签 -->
+            <div class="flex flex-wrap gap-2 mb-3" id="quickTags">
+                <span class="text-xs text-gray-400 mr-1 flex items-center"><i class="fa fa-bolt mr-1"></i>快捷提问</span>
+                <button class="quick-tag text-xs px-2.5 py-1 rounded-full border border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 transition">海淀校区本月报名人数</button>
+                <button class="quick-tag text-xs px-2.5 py-1 rounded-full border border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 transition">各校区收入总额</button>
+                <button class="quick-tag text-xs px-2.5 py-1 rounded-full border border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 transition">出勤率最高的班次</button>
+                <button class="quick-tag text-xs px-2.5 py-1 rounded-full border border-gray-200 text-gray-500 hover:border-indigo-300 hover:text-indigo-600 transition">哪个渠道报名人数最多</button>
+            </div>
+            <!-- 输入框 -->
+            <div class="flex gap-2">
+                <textarea id="queryInput" rows="1"
+                    class="flex-1 border border-gray-300 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                    placeholder="输入你想了解的经营数据问题，例如：海淀校区本月的报名人数是多少？"
+                    onkeydown="handleKeyDown(event)"
+                    oninput="autoResize(this)"></textarea>
+                <button id="sendBtn" onclick="doQuery()"
+                    class="bg-indigo-600 text-white px-5 py-3 rounded-xl hover:bg-indigo-700 transition font-medium shrink-0 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <i class="fa fa-paper-plane"></i>
+                </button>
+            </div>
+            <p class="text-xs text-gray-400 mt-2 text-center">Enter 发送，Shift+Enter 换行</p>
+        </div>
+    </div>
+
+    <script>
+        // ========== 常量 ==========
+        const API_URL = 'http://localhost:8000/api/query';
+
+        const STAGES = [
+            '提取关键字', '召回字段', '召回字段值', '召回指标',
+            '合并召回信息', '过滤指标', '过滤表',
+            '添加额外上下文信息', '生成sql', '校验sql', '校正sql', '执行sql'
+        ];
+
+        // ========== 状态 ==========
+        let currentAbortController = null;
+        let completedStages = [];
+        let currentStage = '';
+
+        // ========== DOM 引用 ==========
+        const chatArea = document.getElementById('chatArea');
+        const messageContainer = document.getElementById('messageContainer');
+        const welcomePanel = document.getElementById('welcomePanel');
+        const queryInput = document.getElementById('queryInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // ========== 输入处理 ==========
+        function autoResize(el) {
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+        }
+
+        function handleKeyDown(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                doQuery();
+            }
+        }
+
+        // ========== 欢迎/快捷按钮事件委托 ==========
+        document.getElementById('welcomeBtns').addEventListener('click', e => {
+            const btn = e.target.closest('.welcome-btn');
+            if (btn) doQuery(btn.querySelector('span').textContent);
+        });
+
+        document.getElementById('quickTags').addEventListener('click', e => {
+            const btn = e.target.closest('.quick-tag');
+            if (btn) {
+                queryInput.value = btn.textContent;
+                queryInput.focus();
+                autoResize(queryInput);
+            }
+        });
+
+        // ========== 清空对话 ==========
+        function clearChat() {
+            messageContainer.innerHTML = '';
+            messageContainer.classList.add('hidden');
+            welcomePanel.classList.remove('hidden');
+            completedStages = [];
+        }
+
+        // ========== 隐藏欢迎页 ==========
+        function hideWelcome() {
+            welcomePanel.classList.add('hidden');
+            messageContainer.classList.remove('hidden');
+        }
+
+        // ========== 滚动到底部 ==========
+        function scrollToBottom() {
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        // ========== 添加用户消息 ==========
+        function addUserMessage(text) {
+            hideWelcome();
+            const el = document.createElement('div');
+            el.className = 'flex justify-end animate-slide-up';
+            el.innerHTML = `
+                <div class="bg-indigo-600 text-white rounded-2xl rounded-br-md px-4 py-3 max-w-[80%] shadow-sm">
+                    <p class="text-sm leading-relaxed whitespace-pre-wrap">${escapeHtml(text)}</p>
+                </div>
+                <div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center ml-2 shrink-0">
+                    <i class="fa fa-user text-indigo-500 text-xs"></i>
+                </div>`;
+            messageContainer.appendChild(el);
+            scrollToBottom();
+            return el;
+        }
+
+        // ========== 添加 AI 回复容器（流式更新） ==========
+        function addAiMessageContainer() {
+            hideWelcome();
+            const el = document.createElement('div');
+            el.className = 'flex justify-start animate-slide-up';
+            el.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center mr-2 shrink-0">
+                    <i class="fa fa-database text-white text-xs"></i>
+                </div>
+                <div class="bg-white rounded-2xl rounded-bl-md px-4 py-3 max-w-[85%] shadow-sm border border-gray-100 w-full">
+                    <!-- 思考过程标题 -->
+                    <div class="think-header flex items-center gap-2 cursor-pointer select-none" onclick="toggleThink(this)">
+                        <div class="flex items-center gap-1.5" id="thinkStatus">
+                            <i class="fa fa-spinner fa-spin text-indigo-500 text-xs"></i>
+                            <span class="text-xs text-indigo-500 font-medium">思考中...</span>
+                        </div>
+                        <span id="completedCount" class="text-xs text-gray-400">0/12</span>
+                        <i class="fa fa-chevron-down text-gray-300 text-xs transition-transform duration-300" id="chevron"></i>
+                    </div>
+                    <!-- 阶段列表 -->
+                    <div class="think-collapse open mt-2" id="thinkPanel">
+                        <div class="space-y-0.5" id="stageList">
+                            ${STAGES.map((s, i) => `
+                                <div class="stage-row flex items-center gap-2 text-xs py-1 px-2 rounded-md transition-colors" data-stage="${s}">
+                                    <span class="stage-dot w-4 h-4 rounded-full flex items-center justify-center shrink-0 bg-gray-100 text-gray-300">
+                                        <i class="fa fa-circle-o text-[8px]"></i>
+                                    </span>
+                                    <span class="stage-label text-gray-400">${s}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                    <!-- 结果区域 -->
+                    <div id="resultContainer" class="hidden mt-3 border-t border-gray-100 pt-3"></div>
+                </div>`;
+            messageContainer.appendChild(el);
+            scrollToBottom();
+            return el;
+        }
+
+        // ========== 折叠/展开思考过程 ==========
+        function toggleThink(header) {
+            const panel = header.parentElement.querySelector('.think-collapse');
+            const chevron = header.querySelector('#chevron');
+            panel.classList.toggle('open');
+            chevron.style.transform = panel.classList.contains('open') ? 'rotate(0deg)' : 'rotate(-90deg)';
+        }
+
+        // ========== 更新阶段进度 ==========
+        function updateStage(aiMsg, stageName) {
+            if (completedStages.includes(stageName)) return;
+            completedStages.push(stageName);
+
+            // 当前阶段高亮
+            const stageRow = aiMsg.querySelector(`.stage-row[data-stage="${stageName}"]`);
+            if (stageRow) {
+                const dot = stageRow.querySelector('.stage-dot');
+                const label = stageRow.querySelector('.stage-label');
+                dot.className = 'stage-dot w-4 h-4 rounded-full flex items-center justify-center shrink-0 bg-indigo-100 text-indigo-500';
+                dot.innerHTML = '<i class="fa fa-circle text-[6px]"></i>';
+                label.className = 'stage-label text-indigo-600 font-medium';
+            }
+
+            // 之前的已完成阶段
+            STAGES.forEach(s => {
+                if (completedStages.includes(s) && s !== stageName) {
+                    const row = aiMsg.querySelector(`.stage-row[data-stage="${s}"]`);
+                    if (row) {
+                        const dot = row.querySelector('.stage-dot');
+                        const label = row.querySelector('.stage-label');
+                        dot.className = 'stage-dot w-4 h-4 rounded-full flex items-center justify-center shrink-0 bg-green-100 text-green-500';
+                        dot.innerHTML = '<i class="fa fa-check text-[8px]"></i>';
+                        label.className = 'stage-label text-green-600';
+                    }
+                }
+            });
+
+            // 更新计数
+            const countEl = aiMsg.querySelector('#completedCount');
+            if (countEl) countEl.textContent = `${completedStages.length}/${STAGES.length}`;
+
+            scrollToBottom();
+        }
+
+        // ========== 完成所有阶段 ==========
+        function finishThinking(aiMsg) {
+            const statusEl = aiMsg.querySelector('#thinkStatus');
+            if (statusEl) {
+                statusEl.innerHTML = '<i class="fa fa-check-circle text-green-500 text-xs"></i><span class="text-xs text-green-500 font-medium">查询完成</span>';
+            }
+            aiMsg.querySelector('#chevron').style.transform = 'rotate(0deg)';
+            const countEl = aiMsg.querySelector('#completedCount');
+            if (countEl) countEl.textContent = `${STAGES.length}/${STAGES.length}`;
+        }
+
+        // ========== 显示结果 ==========
+        function showResult(aiMsg, data) {
+            finishThinking(aiMsg);
+            const container = aiMsg.querySelector('#resultContainer');
+            container.classList.remove('hidden');
+
+            if (data.error) {
+                container.innerHTML = `
+                    <div class="bg-red-50 border border-red-100 rounded-lg p-3">
+                        <div class="flex items-center gap-2 mb-1">
+                            <i class="fa fa-exclamation-circle text-red-500"></i>
+                            <span class="text-sm font-medium text-red-600">查询出错</span>
+                        </div>
+                        <p class="text-xs text-red-500 font-mono whitespace-pre-wrap">${escapeHtml(data.error)}</p>
+                    </div>`;
+            } else if (data.result && data.result.length > 0) {
+                const rows = data.result;
+                const cols = Object.keys(rows[0]);
+                let html = `
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs text-gray-500">共 <strong>${rows.length}</strong> 条记录</span>
+                        <button onclick="copyTable(this)" class="text-xs text-indigo-500 hover:text-indigo-700 flex items-center gap-1">
+                            <i class="fa fa-clipboard"></i> 复制
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto rounded-lg border border-gray-200">
+                        <table class="result-table">
+                            <thead><tr>${cols.map(c => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead>
+                            <tbody>${rows.map(row => `
+                                <tr>${cols.map(c => {
+                                    const val = row[c];
+                                    const isNum = typeof val === 'number';
+                                    return `<td class="${isNum ? 'number' : ''}">${val != null ? escapeHtml(String(val)) : '<span class="text-gray-300">-</span>'}</td>`;
+                                }).join('')}</tr>
+                            `).join('')}</tbody>
+                        </table>
+                    </div>`;
+                container.innerHTML = html;
+            } else if (data.result && data.result.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-gray-50 rounded-lg p-4 text-center">
+                        <i class="fa fa-inbox text-gray-300 text-2xl mb-2 block"></i>
+                        <p class="text-sm text-gray-400">查询无数据</p>
+                    </div>`;
+            }
+            scrollToBottom();
+        }
+
+        // ========== 复制表格 ==========
+        function copyTable(btn) {
+            const table = btn.closest('#resultContainer').querySelector('table');
+            if (!table) return;
+            let text = '';
+            table.querySelectorAll('tr').forEach(row => {
+                const cells = [];
+                row.querySelectorAll('th, td').forEach(cell => cells.push(cell.textContent.trim()));
+                text += cells.join('\t') + '\n';
+            });
+            navigator.clipboard.writeText(text).then(() => {
+                const orig = btn.innerHTML;
+                btn.innerHTML = '<i class="fa fa-check"></i> 已复制';
+                setTimeout(() => btn.innerHTML = orig, 1500);
+            });
+        }
+
+        // ========== 核心查询 ==========
+        async function doQuery(q) {
+            const query = q || queryInput.value.trim();
+            if (!query) return;
+            if (!q) {
+                queryInput.value = '';
+                queryInput.style.height = 'auto';
+            }
+
+            // 取消上一个请求
+            if (currentAbortController) currentAbortController.abort();
+            currentAbortController = new AbortController();
+            completedStages = [];
+
+            // UI
+            addUserMessage(query);
+            const aiMsg = addAiMessageContainer();
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+            try {
+                const resp = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query }),
+                    signal: currentAbortController.signal
+                });
+
+                if (!resp.ok) {
+                    throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+                }
+
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const events = buffer.split('\n\n');
+                    buffer = events.pop();
+                    for (const event of events) {
+                        const dataLine = event.split('\n').find(l => l.startsWith('data: '));
+                        if (!dataLine) continue;
+                        try {
+                            const payload = JSON.parse(dataLine.slice(6));
+                            if (payload.stage) updateStage(aiMsg, payload.stage);
+                            if (payload.result !== undefined || payload.error) showResult(aiMsg, payload);
+                        } catch (e) { /* skip */ }
+                    }
+                }
+                // 处理剩下的事件
+                if (buffer.trim() && buffer.includes('data: ')) {
+                    try {
+                        const jsonStr = buffer.trim().split('\n').find(l => l.startsWith('data: ')).slice(6);
+                        const payload = JSON.parse(jsonStr);
+                        if (payload.result !== undefined || payload.error) showResult(aiMsg, payload);
+                    } catch (e) { /* skip */ }
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                showResult(aiMsg, { error: `连接失败：${err.message}\n\n请确认后端已启动：uv run fastapi dev main.py` });
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="fa fa-paper-plane"></i>';
+                currentAbortController = null;
+            }
+        }
+
+        // ========== 工具函数 ==========
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
